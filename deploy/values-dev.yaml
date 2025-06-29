@@ -1,0 +1,14 @@
+replicaCount: 1
+
+podDisruptionBudget:
+  enabled: false
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: inventory.dev.example.com
+      paths: ["/"]
+
+env:
+  LOG_LEVEL: debug

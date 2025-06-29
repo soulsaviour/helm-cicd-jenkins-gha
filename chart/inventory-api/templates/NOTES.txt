@@ -1,0 +1,8 @@
+{{ include "inventory-api.fullname" . }} is deployed with image tag {{ .Values.image.tag | default .Chart.AppVersion }}.
+
+Check the rollout:
+  kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "inventory-api.fullname" . }}
+{{- if .Values.ingress.enabled }}
+
+URL: http{{ if .Values.ingress.tls }}s{{ end }}://{{ (first .Values.ingress.hosts).host }}/
+{{- end }}

@@ -19,6 +19,29 @@ service:
   type: ClusterIP
   port: 80
 
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  #  - host: inventory.example.com
+  #    paths: ["/"]
+  tls: []
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+# Spread replicas across zones and nodes when the cluster has them.
+topologySpread:
+  enabled: true
+
 resources:
   requests:
     cpu: 100m
