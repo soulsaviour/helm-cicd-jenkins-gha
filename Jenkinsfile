@@ -1,8 +1,9 @@
 // Builds inventory-api, pushes the image to ECR and deploys it with Helm.
 //
-// Needs on the agent: docker, helm, the AWS CLI. Jenkins credentials:
+// Needs on the agent: docker, helm, kubectl, the AWS CLI. Jenkins credentials:
 //   aws-ci          AWS credentials (AWS Credentials plugin) that can push to ECR
 //   kubeconfig-dev  secret file: kubeconfig for the dev cluster
+//   kubeconfig-prod secret file: kubeconfig for the production cluster
 // and a global environment variable AWS_ACCOUNT_ID.
 
 pipeline {
@@ -80,6 +81,32 @@ pipeline {
               --set image.repository="$IMAGE" \
               --set image.tag="$IMAGE_TAG" \
               --atomic --wait --timeout 5m
+          '''
+        }
+      }
+    }
+
+    stage('Approve production') {
+      when { branch 'main' }
+      steps {
+        timeout(time: 2, unit: 'HOURS') {
+          input message: "Deploy ${env.IMAGE_TAG} to production?", ok: 'Deploy', submitter: 'release-managers'
+        }
+      }
+    }
+
+    stage('Deploy to production') {
+      when { branch 'main' }
+      steps {
+        withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG')]) {
+          sh '''
+            helm upgrade --install inventory-api "$CHART" \
+              --namespace inventory --create-namespace \
+              -f deploy/values-prod.yaml \
+              --set image.repository="$IMAGE" \
+              --set image.tag="$IMAGE_TAG" \
+              --atomic --wait --timeout 10m
+            kubectl -n inventory rollout status deployment/inventory-api --timeout 2m
           '''
         }
       }
