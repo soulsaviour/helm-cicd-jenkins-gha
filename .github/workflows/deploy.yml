@@ -1,0 +1,63 @@
+name: deploy
+
+# Manual deploys of an image built by CI. Each GitHub environment holds its
+# own KUBECONFIG_B64 secret, and production can require reviewers in the
+# repository's environment settings.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [dev, prod]
+        required: true
+      image_tag:
+        description: Image tag to deploy (the full commit SHA CI built)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      IMAGE_TAG: ${{ inputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+
+      - name: Check the tag looks like a commit SHA
+        run: |
+          [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "image_tag must be a full commit SHA"; exit 1; }
+
+      - name: Write kubeconfig
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Helm upgrade
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          helm upgrade --install inventory-api chart/inventory-api \
+            --namespace inventory --create-namespace \
+            -f "deploy/values-$ENVIRONMENT.yaml" \
+            --set image.repository="$image" \
+            --set image.tag="$IMAGE_TAG" \
+            --atomic --wait --timeout 10m
+
+      - name: Show release
+        run: |
+          helm -n inventory history inventory-api --max 5
+          kubectl -n inventory get pods -l app.kubernetes.io/name=inventory-api
